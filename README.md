@@ -7,7 +7,7 @@
 ## 🌐 在线体验
 
 👉 点击访问：
-**🔗 https://你的用户名-你的space名.hf.space**
+**🔗 https://wensu0604-my-ai-chat.hf.space/**
 
 > ⚠️ 如果加载较慢，是因为免费部署环境冷启动（正常现象）
 
