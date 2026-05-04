@@ -70,6 +70,7 @@
 import gradio as gr
 from openai import OpenAI
 import os
+from datetime import date
 
 # ========= 配置 =========
 client = OpenAI(
@@ -77,17 +78,38 @@ client = OpenAI(
     base_url="https://models.inference.ai.azure.com"
 )
 
+# 👉 每日上限（自己定一个安全值）
+DAILY_LIMIT = 80000
+
 # ========= 聊天函数 =========
-def chat(user_input, history):
+def chat(user_input, history, usage_state):
     try:
         if history is None:
             history = []
+
+        # ========= 跨天重置 =========
+        today = str(date.today())
+        if usage_state["date"] != today:
+            usage_state["date"] = today
+            usage_state["daily_total"] = 0
+
+        # ========= 超限直接拦截 =========
+        if usage_state["daily_total"] >= DAILY_LIMIT:
+            history.append({
+                "role": "assistant",
+                "content": "⚠️ 今日 token 已达上限，已停止调用模型"
+            })
+            return "", history, usage_state, f"📊 今日已用: {usage_state['daily_total']} / {DAILY_LIMIT}"
 
         # 1️⃣ 先把用户输入加入历史（新版格式）
         history.append({
             "role": "user",
             "content": user_input
         })
+
+        # 2️⃣. 👉 在这里截断（关键位置）
+        if len(history) > 20:
+            del history[:-20]
 
         # 2️⃣ 调用模型（直接用 history）
         response = client.chat.completions.create(
@@ -98,25 +120,44 @@ def chat(user_input, history):
 
         reply = response.choices[0].message.content
 
+        # ========= token统计 =========
+        usage = response.usage
+        total_tokens = usage.total_tokens
+
+        usage_state["daily_total"] += total_tokens
+
+        # ========= 接近上限提醒 =========
+        warning = ""
+        if usage_state["daily_total"] > DAILY_LIMIT * 0.5:
+            warning = "\n\n⚠️ 已使用超过50%额度"
+
         # 3️⃣ 把AI回复加入历史
+        history.append({
+            "role": "assistant",
+            "content": reply + warning
+        })
+
+        return "", history, usage_state, f"📊 今日已用: {usage_state['daily_total']} / {DAILY_LIMIT}"
+
+    except Exception as e:
+        error_msg = str(e)
+
+         # 👉 捕获额度 / 限流错误
+        if "429" in error_msg or "quota" in error_msg or "limit" in error_msg:
+            reply = "🚫 已触发平台额度限制，请稍后再试"
+        else:
+            reply = f"❌ 错误: {error_msg}"
+
         history.append({
             "role": "assistant",
             "content": reply
         })
-
-        return "", history
-
-    except Exception as e:
-        history.append({
-            "role": "assistant",
-            "content": f"❌ 错误: {str(e)}"
-        })
-        return "", history
+        return "", history, usage_state, f"📊 今日已用: {usage_state['daily_total']} / {DAILY_LIMIT}"
 
 
 # ========= 清空 =========
 def clear():
-    return []
+    return [], [], {"date": str(date.today()), "daily_total": 0}, f"📊 今日已用: 0 / {DAILY_LIMIT}"
 
 
 # ========= 示例问题 =========
@@ -135,6 +176,8 @@ with gr.Blocks() as demo:
     #聊天框
     chatbot = gr.Chatbot()
 
+    usage_text = gr.Markdown(f"📊 今日已用: 0 / {DAILY_LIMIT}")
+
     #用户输入框
     msg = gr.Textbox(placeholder="输入你的问题...")
 
@@ -149,10 +192,23 @@ with gr.Blocks() as demo:
     # 状态（保存聊天记录）
     state = gr.State([])
 
+    # 用量记录
+    usage_state = gr.State({
+        "date": str(date.today()),
+        "daily_total": 0
+    })
+
     # 发送消息
-    send.click(chat, inputs=[msg, state], outputs=[msg, chatbot])
+    send.click(chat, inputs=[msg, state, usage_state], outputs=[msg, chatbot, usage_state, usage_text])
+
+    # 回车发送（推荐加）
+    msg.submit(
+        chat,
+        inputs=[msg, state, usage_state],
+        outputs=[msg, chatbot, usage_state, usage_text]
+    )
 
     # 清空
-    clear_btn.click(clear, outputs=chatbot)
+    clear_btn.click(clear, outputs=[chatbot, state, usage_state, usage_text])
 
 demo.launch()
