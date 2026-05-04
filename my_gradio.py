@@ -71,6 +71,7 @@ import gradio as gr
 from openai import OpenAI
 import os
 from datetime import date, datetime
+from zoneinfo import ZoneInfo
 import json
 import re
 import requests
@@ -165,7 +166,7 @@ def handle_local_time(user_input):
     本地处理：时间查询
     """
     if "几点" in user_input or "时间" in user_input:
-        now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now = datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S")
         return f"现在时间是：{now}"
     return None
 
@@ -175,7 +176,7 @@ def handle_local_date(user_input):
     本地处理：日期查询
     """
     if "今天" in user_input:
-        now = datetime.now()
+        now = datetime.now(ZoneInfo("Asia/Shanghai"))
         return now.strftime("今天是：%Y年%m月%d日 %A")
     return None
 
