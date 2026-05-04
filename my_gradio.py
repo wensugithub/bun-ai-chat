@@ -272,6 +272,10 @@ def chat(user_input, history):
     """
     global global_usage
 
+    print(f"DEBUG: user_input={user_input}")
+
+    print(f"DEBUG: history={history}")
+
     if history is None:
         history = []
 
@@ -310,7 +314,7 @@ def chat(user_input, history):
         # 8️⃣ 加入 AI 回复
         history.append({"role": "assistant", "content": reply})
 
-        return "", history, get_usage_text()
+        return "", history, get_usage_text(), history
 
     except Exception as e:
         return handle_error(e, history)
@@ -322,7 +326,7 @@ def update_history(history, user_input, reply):
     """
     history.append({"role": "user", "content": user_input})
     history.append({"role": "assistant", "content": reply})
-    return "", history, get_usage_text()
+    return "", history, get_usage_text(), history
 
 
 def handle_error(e, history):
@@ -337,7 +341,7 @@ def handle_error(e, history):
         reply = f"❌ 错误: {msg}"
 
     history.append({"role": "assistant", "content": reply})
-    return "", history, get_usage_text()
+    return "", history, get_usage_text(), history
 
 
 # =========================================
@@ -377,10 +381,10 @@ with gr.Blocks() as demo:
     state = gr.State([])
 
     # 发送
-    send.click(chat, inputs=[msg, state], outputs=[msg, chatbot, usage_text])
+    send.click(chat, inputs=[msg, state], outputs=[msg, chatbot, usage_text, state])
 
     # 回车发送
-    msg.submit(chat, inputs=[msg, state], outputs=[msg, chatbot, usage_text])
+    msg.submit(chat, inputs=[msg, state], outputs=[msg, chatbot, usage_text, state])
 
     # 清空
     clear_btn.click(clear, outputs=[chatbot, state])
